@@ -15,13 +15,17 @@ struct reqstruct {
     string ip;
     string pageReq;
 };
+
 const int BUFFER_SIZE = 5;
+
 queue<reqstruct> msg_queue;
+
 string pages[10] = {"myspace.com", "github.com", "hulu.com", "twitter.com", "facebook.com", "reddit.com", "amazon.com", "instagram.com", "google.com", "netflix.com"};
 sem_t empty;
 sem_t full;
 sem_t lock;
 int requestID = 0;
+
 void listen() {
     while (true) {
         this_thread::sleep_for(chrono::seconds(1));
@@ -38,6 +42,7 @@ void listen() {
         sem_post(&full);
     }
 }
+
 void do_request(int threadID) {
     while (true) {
         sem_wait(&full);
