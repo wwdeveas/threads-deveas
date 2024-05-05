@@ -59,13 +59,13 @@ int main() {
     sem_init(&empty, 0, BUFFER_SIZE);
     sem_init(&full, 0, 0);
     sem_init(&lock, 0, 1);
-    thread listen_thread(listen);
+    thread listener(listen);
     int numThread = 4;
     thread currentThread[numThread];
     for (int i = 0; i < numThread; i++) {
         currentThread[i] = thread(do_request, i);
     }
-    listen_thread.join();
+    listener.join();
     for (int i = 0; i < numThread; i++) {
         currentThread[i].join();
     }
