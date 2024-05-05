@@ -3,69 +3,74 @@
 //04/29/24
 #include <iostream>
 #include <thread>
+#include <semaphore.h>
 #include <queue>
-#include <mutex>
-#include <condition_variable>
+#include <string>
 #include <chrono>
-#include <random>
-
+#include <ctime>
 using namespace std;
 
-struct RequestStructure {
-    int request_id;
-    string ip_address;
-    string page_requested;
+struct reqstruct {
+    int requestID;
+    string ip;
+    string pageReq;
 };
-
-queue<RequestStructure> msg_queue;
-mutex mtx;
-condition_variable cv;
-int request_counter = 0;
-string webPages[10] = {"google.com", "yahoo.com", "stackoverflow.com", "github.com", "amazon.com", "ebay.com", "wikipedia.org", "reddit.com", "linkedin.com", "twitter.com"};
-
-
+const int BUFFER_SIZE = 5;
+queue<reqstruct> msg_queue;
+string pages[10] = {"myspace.com", "github.com", "hulu.com", "twitter.com", "facebook.com", "reddit.com", "amazon.com", "instagram.com", "google.com", "netflix.com"};
+sem_t empty;
+sem_t full;
+sem_t lock;
+int requestID = 0;
 void listen() {
     while (true) {
-        this_thread::sleep_for(chrono::seconds(rand() % 3 + 1));
-        RequestStructure req;
-        req.request_id = ++request_counter;
-        req.ip_address = "";
-        req.page_requested = webPages[rand() % 10];
-        unique_lock<mutex> lock(mtx);
-        msg_queue.push(req);
-        lock.unlock();
-        cv.notify_one();
+        this_thread::sleep_for(chrono::seconds(1));
+        reqstruct new_request;
+        new_request.requestID = requestID;
+        new_request.ip = "";
+        new_request.pageReq = pages[rand() % 10];
+        sem_wait(&empty);
+        sem_wait(&lock);
+        msg_queue.push(new_request);
+        cout << "reqID: " << requestID << " appended" << endl;
+        requestID++;
+        sem_post(&lock);
+        sem_post(&full);
     }
 }
-
-void do_request(int thread_id) {
+void do_request(int threadID) {
     while (true) {
-        unique_lock<mutex> lock(mtx);
-        cv.wait(lock, [] { return !msg_queue.empty(); });
-
-        RequestStructure req = msg_queue.front();
+        sem_wait(&full);
+        sem_wait(&lock);
+        if (msg_queue.empty()) {
+            sem_post(&lock);
+            continue;
+        }
+        reqstruct req = msg_queue.front();
         msg_queue.pop();
+        cout << "threadID: " << threadID << "\n req: " << req.requestID << "\n page " << req.pageReq << endl;
+        sem_post(&lock);
+        sem_post (&empty);
 
-        lock.unlock();
-
-        cout << "Thread " << thread_id << " completed request " << req.request_id << " requesting webpage " << req.page_requested << endl;
     }
 }
 
 int main() {
-    const int num_listener_threads = 3; 
-    thread listener_threads[num_listener_threads];
-    for (int i = 0; i < num_listener_threads; ++i) {
-        listener_threads[i] = thread(listen);
+    sem_init(&empty, 0, BUFFER_SIZE);
+    sem_init(&full, 0, 0);
+    sem_init(&lock, 0, 1);
+    thread listen_thread(listen);
+    int numThread = 4;
+    thread currentThread[numThread];
+    for (int i = 0; i < numThread; i++) {
+        currentThread[i] = thread(do_request, i);
     }
-    const int num_request_threads = 5; 
-    thread request_threads[num_request_threads];
-    cout<<num_request_threads;
-    for (int i = 0; i < num_request_threads; ++i) {
-        request_threads[i] = thread(do_request, i + 1);}
-    for (int i = 0; i < num_listener_threads; ++i) {
-        listener_threads[i].join();}
-    for (int i = 0; i < num_request_threads; ++i) {
-        request_threads[i].join();}
+    listen_thread.join();
+    for (int i = 0; i < numThread; i++) {
+        currentThread[i].join();
+    }
+    sem_destroy(&empty);
+    sem_destroy(&full);
+    sem_destroy(&lock);
     return 0;
 }
